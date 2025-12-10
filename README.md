@@ -29,15 +29,17 @@
 ## Hook های اصلی و دلیل انتخاب
 
 - `woocommerce_product_options_pricing`:
-    - برای افزودن فیلد سفارشی در بخش قیمت محصولات ساده، بدون نیاز به تغییر قالب.
+    - برای افزودن فیلد سفارشی در بخش قیمت محصولات ساده
 - `woocommerce_admin_process_product_object`:
-    - برای ذخیره امن متا در زمان ذخیره محصول، مطابق استانداردهای جدید ووکامرس.
+    - برای ذخیره امن متا در زمان ذخیره محصول
 - `woocommerce_product_after_variable_attributes`:
     - برای نمایش فیلد سفارشی در هر variation در صفحه ویرایش محصول متغیر.
 - `woocommerce_save_product_variation`:
-    - برای ذخیره متای variationها وقت ذخیره شدن آن‌ها.
+    - ذخیره متای variation ها برای وقتی که آن ها ذخیره شده اند
 - `woocommerce_product_get_price` و `woocommerce_product_variation_get_price`:
     - برای تغییر قیمت نهایی نمایش داده شده در فرانت‌اند (اعمال تخفیف برای role خاص).
+- `woocommerce_available_variation`
+  - برای اپدیت کردن نمایش قیمت محصول در زمانی که یکی از variation ها انتخاب میشود
 - کنترل نقش‌ها با `wp_get_current_user` و چک `supplier`:
     - برای جلوگیری از تاثیر روی نقش‌های دیگر.
 

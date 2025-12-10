@@ -2,7 +2,7 @@
 /**
  * Plugin Name: XYZ Supplier Discount
  * Description: Apply supplier-specific percentage discounts for WooCommerce products.
- * Version: 1.1.0
+ * Version: 1.0.0
  * Author: Arash
  * Text Domain: xyz-supplier-discount
  */
@@ -16,27 +16,23 @@ class XYZSP_Supplier_Discount_Plugin {
     const META_KEY = '_xyz_supplier_discount_percent';
 
     public function __construct() {
-        // Simple product: admin field + save
+        // Simple product
         add_action( 'woocommerce_product_options_pricing', array( $this, 'xyzsp_AddSupplierDiscountFieldSimple' ) );
         add_action( 'woocommerce_admin_process_product_object', array( $this, 'xyzsp_save_supplier_discount_field_simple' ) );
 
-        // Variable product: variation field + save
+        // Variable product
         add_action( 'woocommerce_product_after_variable_attributes', array( $this, 'xyzsp_add_supplier_discount_field_variation' ), 10, 3 );
         add_action( 'woocommerce_save_product_variation', array( $this, 'xyzsp_save_supplier_discount_field_variation' ), 10, 2 );
 
-        // Base price logic (backend prices)
+        // Base price logic
         add_filter( 'woocommerce_product_get_price', array( $this, 'xyzsp_apply_supplier_discount_price' ), 20, 2 );
         add_filter( 'woocommerce_product_variation_get_price', array( $this, 'xyzsp_apply_supplier_discount_price' ), 20, 2 );
 
-        // Remove these to avoid double-discount:
-        // add_filter( 'woocommerce_get_price_html', array($this ,  'xyzsp_modify_price_html_for_supplier'), 20, 2 );
-        // add_filter( 'woocommerce_variable_price_html', array($this ,  'xyzsp_modify_price_html_for_supplier'), 20, 2 );
-
-        // AJAX variation data (when user selects a variation)
+        // AJAX variation data
         add_filter( 'woocommerce_available_variation', array( $this, 'xyzsp_modify_variation_ajax_data' ), 20, 3 );
     }
 
-    /* ===== Role check ===== */
+
 
     public function xyzsp_CurrentUserHasRole( $role ) {
         if ( ! is_user_logged_in() ) {
@@ -55,7 +51,6 @@ class XYZSP_Supplier_Discount_Plugin {
         return $this->xyzsp_CurrentUserHasRole( 'supplier' );
     }
 
-    /* ===== Admin fields: simple product ===== */
 
     public function xyzsp_AddSupplierDiscountFieldSimple() {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -97,7 +92,6 @@ class XYZSP_Supplier_Discount_Plugin {
         }
     }
 
-    /* ===== Admin fields: variations ===== */
 
     public function xyzsp_add_supplier_discount_field_variation( $loop, $variation_data, $variation ) {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -146,7 +140,6 @@ class XYZSP_Supplier_Discount_Plugin {
         }
     }
 
-    /* ===== Discount validation ===== */
 
     public function xyzsp_validate_discount_value( $value ) {
         $value = str_replace( ',', '.', $value );
@@ -163,28 +156,43 @@ class XYZSP_Supplier_Discount_Plugin {
             return null;
         }
 
-        return $float;
+        return round($float,2);
     }
 
-    /* ===== Get effective discount (product or variation) ===== */
 
+    private $parent_cache = [];
     public function xyzsp_get_effective_discount( $product ) {
         $discount = 0;
 
         if ( $product->is_type( 'variation' ) ) {
+
+
             $discount_meta = $product->get_meta( self::META_KEY, true );
             if ( $discount_meta !== '' ) {
                 $discount = floatval( $discount_meta );
-            } else {
-                $parent = wc_get_product( $product->get_parent_id() );
-                if ( $parent ) {
-                    $parent_meta = $parent->get_meta( self::META_KEY, true );
-                    if ( $parent_meta !== '' ) {
-                        $discount = floatval( $parent_meta );
+            }
+            else {
+                $parent_id = $product->get_parent_id();
+
+                if ( $parent_id ) {
+
+                    if ( ! isset( $this->parent_cache[ $parent_id ] ) ) {
+                        $this->parent_cache[ $parent_id ] = wc_get_product( $parent_id );
+                    }
+
+                    $parent = $this->parent_cache[ $parent_id ];
+
+                    if ( $parent ) {
+                        $parent_meta = $parent->get_meta( self::META_KEY, true );
+                        if ( $parent_meta !== '' ) {
+                            $discount = floatval( $parent_meta );
+                        }
                     }
                 }
             }
+
         } else {
+
             $meta = $product->get_meta( self::META_KEY, true );
             if ( $meta !== '' ) {
                 $discount = floatval( $meta );
@@ -198,7 +206,8 @@ class XYZSP_Supplier_Discount_Plugin {
         return $discount;
     }
 
-    /* ===== Core discount calculation ===== */
+
+
 
     public function xyzsp_get_discounted_price( $product, $base_price = null ) {
         $discount = $this->xyzsp_get_effective_discount( $product );
@@ -216,28 +225,38 @@ class XYZSP_Supplier_Discount_Plugin {
         return $base_price * ( 1 - ( $discount / 100 ) );
     }
 
-    /* ===== Filter backend price (get_price) ===== */
+
+
+    private $processing_price = false;
 
     public function xyzsp_apply_supplier_discount_price( $price, $product ) {
-        if ( is_admin() && ! wp_doing_ajax() ) {
+
+        if ( $this->processing_price ) {
             return $price;
         }
+        $this->processing_price = true;
 
-        if ( ! $this->xyzsp_current_user_is_supplier() ) {
-            return $price;
+
+        $final_price = $price;
+
+
+        if ( ! ( is_admin() && ! wp_doing_ajax() ) ) {
+
+            if ( $this->xyzsp_current_user_is_supplier() && $price !== '' ) {
+
+                $price = floatval( $price );
+                $discounted = $this->xyzsp_get_discounted_price( $product, $price );
+                $final_price = wc_format_decimal( $discounted, wc_get_price_decimals() );
+            }
         }
 
-        if ( $price === '' ) {
-            return $price;
-        }
 
-        $price          = floatval( $price );
-        $discounted     = $this->xyzsp_get_discounted_price( $product, $price );
+        $this->processing_price = false;
 
-        return wc_format_decimal( $discounted, wc_get_price_decimals() );
+        return $final_price;
     }
 
-    /* ===== AJAX variation data (front-end change after selecting variation) ===== */
+
 
     public function xyzsp_modify_variation_ajax_data( $variation_data, $product, $variation ) {
 
@@ -245,7 +264,6 @@ class XYZSP_Supplier_Discount_Plugin {
             return $variation_data;
         }
 
-        // Get the already-discounted price (because get_price() is filtered)
         $price = $variation->get_price();
 
         if ( $price === '' ) {
@@ -256,7 +274,6 @@ class XYZSP_Supplier_Discount_Plugin {
             return $variation_data;
         }
 
-        // DO NOT apply discount again — price is already discounted
         $discounted = floatval( $price );
 
         $variation_data['display_price']         = $discounted;
