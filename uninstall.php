@@ -3,6 +3,8 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
     exit;
 }
 
+/** @global wpdb $wpdb */
+
 $allowed_meta_keys = ['_xyz_supplier_discount_percent'];
 
 foreach ($allowed_meta_keys as $meta_key) {
